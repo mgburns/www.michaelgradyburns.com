@@ -99,7 +99,7 @@ gulp.task('serve', ['styles'], function () {
 gulp.task('serve:dist', ['default'], function () {
     browserSync({
         notify: false,
-        logPrefix: 'WSK',
+        logPrefix: 'MGB',
         server: 'dist'
     });
 });
