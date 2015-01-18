@@ -3,11 +3,23 @@
 // Include Gulp & Tools We'll Use
 var gulp = require('gulp');
 var $ = require('gulp-load-plugins')();
-var rimraf = require('rimraf');
+var del = require('del');
 var runSequence = require('run-sequence');
 var browserSync = require('browser-sync');
 var reload = browserSync.reload;
-var deploy = require("gulp-gh-pages");
+var pagespeed = require('psi');
+
+var AUTOPREFIXER_BROWSERS = [
+  'ie >= 10',
+  'ie_mob >= 10',
+  'ff >= 30',
+  'chrome >= 34',
+  'safari >= 7',
+  'opera >= 23',
+  'ios >= 7',
+  'android >= 4.4',
+  'bb >= 10'
+];
 
 // Optimize Images
 gulp.task('images', function () {
@@ -23,35 +35,30 @@ gulp.task('images', function () {
 
 // Copy All Files At The Root Level
 gulp.task('copy', function () {
-  return gulp.src(['src/*','!src/*.html'])
-    .pipe(gulp.dest('dist'))
-    .pipe($.size({title: 'copy'}));
+    return gulp.src(['src/*','!src/*.html'])
+        .pipe(gulp.dest('dist'))
+        .pipe($.size({title: 'copy'}));
 });
 
-// Automatically Prefix CSS
-gulp.task('styles:css', function () {
-    return gulp.src('src/styles/**/*.css')
-        .pipe($.autoprefixer('last 1 version'))
-        .pipe(gulp.dest('src/styles'))
-        .pipe(reload({stream: true}))
-        .pipe($.size({title: 'styles:css'}));
+// Compile and Automatically Prefix Stylesheets
+gulp.task('styles', function () {
+  // For best performance, don't add Sass partials to `gulp.src`
+  return gulp.src([
+    'src/styles/*.scss',
+    'src/styles/**/*.css'
+  ])
+    .pipe($.changed('styles', {extension: '.scss'}))
+    .pipe($.sass({
+      precision: 10,
+      onError: console.error.bind(console, 'Sass error:')
+    }))
+    .pipe($.autoprefixer({browsers: AUTOPREFIXER_BROWSERS}))
+    .pipe(gulp.dest('.tmp/styles'))
+    // Concatenate And Minify Styles
+    .pipe($.if('*.css', $.csso()))
+    .pipe(gulp.dest('dist/styles'))
+    .pipe($.size({title: 'styles'}));
 });
-
-// Compile Any Other Sass Files You Added (src/styles)
-gulp.task('styles:scss', function () {
-    return gulp.src(['src/styles/**/*.scss'])
-        .pipe($.sass({
-            outputStyle: 'expanded',
-            precision: 10,
-            includePaths: ['src/styles']
-        }))
-        .pipe($.autoprefixer('last 1 version'))
-        .pipe(gulp.dest('.tmp/styles'))
-        .pipe($.size({title: 'styles:scss'}));
-});
-
-// Output Final CSS Styles
-gulp.task('styles', ['styles:scss', 'styles:css']);
 
 // Scan Your HTML For Assets & Optimize Them
 gulp.task('html', function () {
@@ -62,9 +69,7 @@ gulp.task('html', function () {
         // Concatenate And Minify Styles
         .pipe($.if('*.css', $.csso()))
         // Remove Any Unused CSS
-        // Note: If not using the Style Guide, you can delete it from
-        // the next line to only include styles your project uses.
-        .pipe($.if('*.css', $.uncss({ html: ['src/index.html'] })))
+        .pipe($.if('*.css', $.uncss({html: ['src/index.html']})))
         .pipe(assets.restore())
         .pipe($.useref())
         // Minify Any HTML
@@ -75,42 +80,42 @@ gulp.task('html', function () {
 });
 
 // Clean Output Directory
-gulp.task('clean', function (cb) {
-    rimraf('dist', rimraf.bind({}, '.tmp', cb));
-});
+gulp.task('clean', del.bind(null, ['.tmp', 'dist/*', '!dist/.git'], {dot: true}));
 
 // Watch Files For Changes & Reload
-gulp.task('serve', function () {
-    browserSync.init(null, {
-        server: {
-            baseDir: ['src', '.tmp']
-        },
-        // proxy: "localhost:8888",
-        notify: false
+gulp.task('serve', ['styles'], function () {
+    browserSync({
+        notify: false,
+        logPrefix: 'MGB',
+        server: ['.tmp', 'src']
     });
 
     gulp.watch(['src/**/*.html'], reload);
-    gulp.watch(['src/**/*.php'], reload);
-    gulp.watch(['src/styles/**/*.{css,scss}'], ['styles']);
-    gulp.watch(['.tmp/styles/**/*.css'], reload);
-    gulp.watch(['src/images/**/*'], ['images']);
+    gulp.watch(['src/styles/**/*.{scss,css}'], ['styles', reload]);
+    gulp.watch(['src/images/**/*'], reload);
 });
 
-// Build Production Files
-gulp.task('build', function (cb) {
+// Build and serve the output from the dist build
+gulp.task('serve:dist', ['default'], function () {
+    browserSync({
+        notify: false,
+        logPrefix: 'WSK',
+        server: 'dist'
+    });
+});
+
+// Build Production Files, the Default Task
+gulp.task('default', ['clean'], function (cb) {
     runSequence('styles', ['html', 'images', 'copy'], cb);
 });
 
-// Deploy to github.io
-gulp.task('deploy', function () {
-    gulp.src("./dist/**/*")
-        .pipe(deploy({
-            remoteUrl: "git@github.com:mgburns/mgburns.github.io",
-            branch: "master"
-        }));
-});
-
-// Default Task
-gulp.task('default', ['clean'], function (cb) {
-    gulp.start('build', cb);
-});
+// Run PageSpeed Insights
+// Update `url` below to the public URL for your site
+gulp.task('pagespeed', pagespeed.bind(null, {
+    // By default, we use the PageSpeed Insights
+    // free (no API key) tier. You can use a Google
+    // Developer API key if you have one. See
+    // http://goo.gl/RkN0vE for info key: 'YOUR_API_KEY'
+    url: 'http://www.michaelgradyburns.com',
+    strategy: 'mobile'
+}));
