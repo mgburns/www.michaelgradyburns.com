@@ -40,10 +40,10 @@ gulp.task('styles:css', function () {
 // Compile Any Other Sass Files You Added (src/styles)
 gulp.task('styles:scss', function () {
     return gulp.src(['src/styles/**/*.scss'])
-        .pipe($.rubySass({
-            style: 'expanded',
+        .pipe($.sass({
+            outputStyle: 'expanded',
             precision: 10,
-            loadPath: ['src/styles']
+            includePaths: ['src/styles']
         }))
         .pipe($.autoprefixer('last 1 version'))
         .pipe(gulp.dest('.tmp/styles'))
@@ -55,15 +55,17 @@ gulp.task('styles', ['styles:scss', 'styles:css']);
 
 // Scan Your HTML For Assets & Optimize Them
 gulp.task('html', function () {
+    var assets = $.useref.assets({searchPath: '{.tmp,src}'});
+
     return gulp.src('src/**/*.html')
-        .pipe($.useref.assets({searchPath: '{.tmp,src}'}))
+        .pipe(assets)
         // Concatenate And Minify Styles
         .pipe($.if('*.css', $.csso()))
         // Remove Any Unused CSS
         // Note: If not using the Style Guide, you can delete it from
         // the next line to only include styles your project uses.
         .pipe($.if('*.css', $.uncss({ html: ['src/index.html'] })))
-        .pipe($.useref.restore())
+        .pipe(assets.restore())
         .pipe($.useref())
         // Minify Any HTML
         .pipe($.minifyHtml())
