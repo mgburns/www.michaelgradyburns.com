@@ -33,9 +33,9 @@ gulp.task('images', function () {
         .pipe($.size({title: 'images'}));
 });
 
-// Copy All Files At The Root Level
+// Copy public files to doc root
 gulp.task('copy', function () {
-    return gulp.src(['src/*','!src/*.html'])
+    return gulp.src(['public/**/*', 'public/.**/*'])
         .pipe(gulp.dest('dist'))
         .pipe($.size({title: 'copy'}));
 });
